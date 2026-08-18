@@ -41,6 +41,7 @@ async def do_rag(data: Dict[str, str]) -> Dict[str, str]:
 
     template = """You are the best documentation reader and explanator.
     Use the context to answer the research query from the user. 
+    Use markdown in your answer. For example bullet points or titles.
     If you do not have enough information, answer that you need more documentation. 
     
     Context:
@@ -55,20 +56,25 @@ async def do_rag(data: Dict[str, str]) -> Dict[str, str]:
     # print('data ', data)
     # qa_chain = create_retrieval_chain(retriever, question_answer_chain)
 
-    qa_chain = create_retrieval_chain(retriever, prompt | ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0))
+    llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0)
+    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
+
+    #qa_chain = create_retrieval_chain(retriever, prompt | llm)
+    qa_chain = create_retrieval_chain(retriever, combine_docs_chain)
 
 
     async def generate(query):
         async for chunk in qa_chain.astream({"input": query['request']}):
             print('chunk!', chunk)
             text = chunk.get("answer", "")
-            yield f"data: {text}\n\n"
+            yield text #f"data: {text}\n\n"
 
 
     #return {"message": "Everything is fine!"}
     to_return = StreamingResponse(
         content=generate(data),
-        media_type="text/event-stream",
+        media_type="text/markdown",
+        #media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
