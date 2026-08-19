@@ -48,15 +48,20 @@ def initialize_the_index():
             embeddings=embeddings,
             allow_dangerous_deserialization=True
         )
+        retriever = db.as_retriever(search_kwargs={"k": CHUNKS_TO_RETRIVE})
+        combine_docs_chain = create_stuff_documents_chain(llm, prompt)
+        qa_chain = create_retrieval_chain(retriever, combine_docs_chain)
     else:
-        db = FAISS.from_documents([], embeddings)
+        db = None
+        retriever = None
+        combine_docs_chain = None
+        qa_chain = None
 
-    retriever = db.as_retriever(search_kwargs={"k": CHUNKS_TO_RETRIVE})
+
     prompt = ChatPromptTemplate.from_template(template=PROMPT_TEMPLATE)
     llm = ChatOpenAI(model=OPENAI_MODEL_NAME, temperature=TEMPERATURE)
 
-    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
-    qa_chain = create_retrieval_chain(retriever, combine_docs_chain)
+
 
 
 async def update_the_index():
@@ -77,6 +82,14 @@ initialize_the_index()
 
 @app.post("/api/research")
 async def do_rag(data: dict):
+
+    if qa_chain is None:
+        raise HTTPException(
+        status_code=503,
+        detail="Upload the documents first"
+        )
+
+
     async def generate(query):
         async for chunk in qa_chain.astream({"input": query['request']}):
             text = chunk.get("answer", "")
